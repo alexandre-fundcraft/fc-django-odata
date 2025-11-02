@@ -13,6 +13,13 @@ This package provides native OData v4 implementation with:
 __version__ = "2.0.0"
 __author__ = "Alexandre Busquets"
 
+from .exceptions import (
+    ODataFieldNotFoundError,
+    ODataFilterError,
+    ODataInvalidFilterSyntaxError,
+    ODataInvalidOperatorError,
+    ODataInvalidValueError,
+)
 from .mixins import ODataMixin, ODataSerializerMixin
 from .serializers import ODataModelSerializer, ODataSerializer
 from .utils import apply_odata_query_params, parse_odata_query
@@ -27,4 +34,9 @@ __all__ = [
     "ODataSerializerMixin",
     "apply_odata_query_params",
     "parse_odata_query",
+    "ODataFilterError",
+    "ODataFieldNotFoundError",
+    "ODataInvalidFilterSyntaxError",
+    "ODataInvalidOperatorError",
+    "ODataInvalidValueError",
 ]

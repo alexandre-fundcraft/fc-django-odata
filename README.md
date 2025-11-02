@@ -16,7 +16,7 @@ This package transforms your Django models into OData-compliant endpoints by sea
 - **Complete OData v4 Query Support**: Full implementation of OData query options (`$filter`, `$orderby`, `$top`, `$skip`, `$select`, `$expand`, `$count`)
 - **OData Response Format**: Standards-compliant JSON responses with proper `@odata.context` and metadata annotations
 - **Service Metadata**: Built-in `$metadata` endpoint for complete API discovery and client generation
-- **OData Error Handling**: Standardized error responses following OData specifications
+- **OData Error Handling**: Standardized error responses following OData specifications (SPEC-011)
 
 ### ⚡ **Performance & Optimization**
 - **Field-Level Query Optimization**: Automatically fetches only requested fields from database using Django's `.only()` (SPEC-003)
@@ -513,7 +513,16 @@ DJANGO_ODATA = {
 {
   "error": {
     "code": "BadRequest",
-    "message": "The query specified in the URI is not valid."
+    "message": "Invalid filter expression: nonexistent_field eq 'value' - Field 'nonexistent_field' does not exist on entity 'BlogPost'",
+    "details": [
+      {
+        "code": "FieldNotFound",
+        "message": "Field 'nonexistent_field' does not exist on entity 'BlogPost'",
+        "target": "$filter",
+        "field": "nonexistent_field",
+        "entity": "BlogPost"
+      }
+    ]
   }
 }
 ```
@@ -882,7 +891,7 @@ This fork adds significant improvements over the original:
 
 ### Planned Features
 - **SPEC-008**: Query result caching for improved performance
-- **SPEC-009**: Enhanced error handling and validation
+- **SPEC-011**: Filter error handling (COMPLETED)
 - Additional OData v4 features (delta queries, batch operations)
 - Performance monitoring and metrics
 - GraphQL compatibility layer
@@ -898,6 +907,11 @@ This fork adds significant improvements over the original:
 ### v2.0.0 (In Progress)
 
 #### Major Changes
+- **Filter Error Handling (SPEC-011)**: Implemented comprehensive OData filter error handling that raises structured exceptions instead of returning unfiltered data. This change:
+  - Provides detailed, OData-compliant error responses for filter parsing failures
+  - Includes specific error codes for different types of filter errors (FieldNotFound, InvalidFilterSyntax, InvalidOperator, InvalidValue)
+  - Maintains proper error logging for debugging while providing user-friendly error messages
+  - Ensures API stability by failing fast on invalid filter expressions rather than silently ignoring them
 - **Native Field Selection & Expansion (SPEC-001)**: Replaced `drf-flex-fields` dependency with a native implementation for field selection (`$select`) and expansion (`$expand`). This change:
   - Removes external dependencies for core functionality
   - Improves performance with optimized query handling

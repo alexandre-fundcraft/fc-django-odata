@@ -126,9 +126,10 @@ class TestODataMixin(TestCase):
         self.assertIn("$select", context["odata_params"])
 
     def test_apply_odata_query_error_handling(self):
-        """Test that OData query errors are handled gracefully."""
+        """Test that OData query errors raise exceptions instead of returning unfiltered data."""
+        from django_odata.exceptions import ODataFilterError
 
-        # Create a mock queryset
+        # Create a mock queryset that will cause an error
         class MockQuerySet:
             def filter(self, **kwargs):
                 raise Exception("Test error")
@@ -141,10 +142,10 @@ class TestODataMixin(TestCase):
         viewset.request = request
 
         mock_queryset = MockQuerySet()
-        result = viewset.apply_odata_query(mock_queryset)
 
-        # Should return original queryset on error
-        self.assertEqual(result, mock_queryset)
+        # Should raise ODataFilterError instead of returning queryset
+        with self.assertRaises(ODataFilterError):
+            viewset.apply_odata_query(mock_queryset)
 
     def test_list_method_response_format(self):
         """Test that list method formats response correctly."""

@@ -452,27 +452,35 @@ class TestODataErrorHandling(TestCase):
 
     def test_malformed_filter_expression(self):
         """Test handling of malformed filter expressions."""
-        from odata_query.exceptions import ParsingException
-
+        from django_odata.exceptions import ODataFilterError
         from django_odata.utils import apply_odata_query_params
 
         # Test malformed expression
         params = {"$filter": "invalid syntax here"}
 
-        with self.assertRaises(ParsingException):
+        with self.assertRaises(ODataFilterError) as cm:
             apply_odata_query_params(self.queryset, params)
+
+        # Verify error details
+        error = cm.exception
+        self.assertEqual(error.error_code, "QueryError")
+        self.assertIn("Failed to parse", error.message)
 
     def test_invalid_field_name(self):
         """Test handling of invalid field names."""
-        from django.core.exceptions import FieldError
-
+        from django_odata.exceptions import ODataFilterError
         from django_odata.utils import apply_odata_query_params
 
-        # Test invalid field name - should raise FieldError during query building
+        # Test invalid field name - should raise ODataFilterError
         params = {"$filter": "nonexistent_field eq 'value'"}
 
-        with self.assertRaises(FieldError):
+        with self.assertRaises(ODataFilterError) as cm:
             apply_odata_query_params(self.queryset, params)
+
+        # Verify error details
+        error = cm.exception
+        self.assertEqual(error.error_code, "InternalError")
+        self.assertIn("nonexistent_field", error.message)
 
     def test_type_mismatch(self):
         """Test handling of type mismatches."""

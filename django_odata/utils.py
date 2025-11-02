@@ -10,6 +10,13 @@ from django.http import QueryDict
 from odata_query.django import apply_odata_query
 from odata_query.exceptions import ODataException
 
+from .exceptions import (
+    ODataFieldNotFoundError,
+    ODataFilterError,
+    ODataInvalidFilterSyntaxError,
+    ODataInvalidOperatorError,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -307,11 +314,68 @@ def apply_odata_query_params(
         return queryset
 
     except ODataException as e:
-        logger.error(f"OData query error: {e}")
-        raise
+        # Convert odata-query exceptions to OData-specific errors
+        filter_expr = query_params.get("$filter", "")
+        if "field" in str(e).lower() and "not found" in str(e).lower():
+            # Extract field name from error message if possible
+            field_name = "unknown"
+            if "field" in str(e):
+                try:
+                    field_part = str(e).split("field")[1].split()[0].strip("'\"")
+                    field_name = field_part
+                except (IndexError, AttributeError):
+                    pass
+            raise ODataFieldNotFoundError(
+                field_name=field_name,
+                model_name=queryset.model.__name__,
+                original_exception=e,
+            ) from e
+        elif "parsing" in str(e).lower() or "syntax" in str(e).lower():
+            raise ODataInvalidFilterSyntaxError(
+                filter_expression=filter_expr, details=str(e), original_exception=e
+            ) from e
+        elif "operator" in str(e).lower():
+            # Extract operator from filter expression
+            operator = "unknown"
+            if filter_expr:
+                # Simple heuristic to find operator
+                operators = [
+                    " eq ",
+                    " ne ",
+                    " gt ",
+                    " ge ",
+                    " lt ",
+                    " le ",
+                    " and ",
+                    " or ",
+                    " not ",
+                ]
+                for op in operators:
+                    if op in filter_expr:
+                        operator = op.strip()
+                        break
+            raise ODataInvalidOperatorError(
+                operator=operator, filter_expression=filter_expr, original_exception=e
+            ) from e
+        else:
+            # Generic OData error
+            raise ODataFilterError(
+                message=f"OData query error: {str(e)}",
+                code="QueryError",
+                target="$filter",
+                details={"filter_expression": filter_expr},
+                original_exception=e,
+            ) from e
     except Exception as e:
         logger.error(f"Unexpected error applying OData query: {e}")
-        raise
+        filter_expr = query_params.get("$filter", "")
+        raise ODataFilterError(
+            message=f"Unexpected error processing OData query: {str(e)}",
+            code="InternalError",
+            target="$filter",
+            details={"filter_expression": filter_expr},
+            original_exception=e,
+        ) from e
 
 
 def _apply_filter(queryset: QuerySet, query_params: Dict[str, Any]) -> QuerySet:

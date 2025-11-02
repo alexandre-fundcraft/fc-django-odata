@@ -11,6 +11,10 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from .exceptions import (
+    ODataExpandError,
+    ODataFilterError,
+)
 from .optimization import optimize_queryset_for_expand, optimize_queryset_for_select
 from .utils import (
     apply_odata_query_params,
@@ -102,6 +106,9 @@ class ODataMixin:
 
         Returns:
             Filtered and ordered queryset
+
+        Raises:
+            ODataFilterError: If filter parsing or execution fails
         """
         odata_params = self.get_odata_query_params()
 
@@ -117,8 +124,16 @@ class ODataMixin:
             return queryset
         except Exception as e:
             logger.error(f"Error applying OData query: {e}")
-            # Return original queryset if query fails
-            return queryset
+            # Convert generic exceptions to OData-specific errors
+            if isinstance(e, (ODataFilterError, ODataExpandError)):
+                raise  # Re-raise OData errors as-is
+            else:
+                # Wrap unexpected exceptions in ODataFilterError
+                raise ODataFilterError(
+                    message=f"Unexpected error processing OData query: {str(e)}",
+                    code="InternalError",
+                    original_exception=e,
+                ) from e
 
     def get_queryset(self):
         """
@@ -127,7 +142,11 @@ class ODataMixin:
         queryset = super().get_queryset()
 
         # Apply optimizations using the extracted functions
-        queryset = self._apply_odata_optimizations(queryset)
+        try:
+            queryset = self._apply_odata_optimizations(queryset)
+        except (ODataFilterError, ODataExpandError):
+            # Re-raise to be caught by list/retrieve methods
+            raise
 
         # Apply OData query parameters
         return self.apply_odata_query(queryset)
@@ -148,7 +167,16 @@ class ODataMixin:
             if isinstance(expand_value, list):
                 expand_value = expand_value[0] if expand_value else ""
             if expand_value:
-                expand_fields = parse_expand_fields_v2(expand_value)
+                try:
+                    expand_fields = parse_expand_fields_v2(expand_value)
+                    # Validate expand fields exist on the model
+                    self._validate_expand_fields(expand_fields, queryset.model)
+                except ODataExpandError:
+                    # Re-raise OData errors to be caught by list/retrieve methods
+                    raise
+                except Exception as e:
+                    logger.warning(f"Error parsing $expand parameter: {e}")
+                    # Continue without expand optimization for unexpected errors
 
         # Apply field selection optimization
         if "$select" in odata_params:
@@ -159,15 +187,100 @@ class ODataMixin:
                 queryset, select_fields, expand_fields
             )
 
-        # Apply expansion optimization
+        # Apply expansion optimization with error handling
         if expand_fields:
-            queryset = optimize_queryset_for_expand(queryset, expand_fields)
+            try:
+                queryset = optimize_queryset_for_expand(queryset, expand_fields)
+            except Exception as e:
+                # Check if this is a FieldError from select_related/prefetch_related
+                error_msg = str(e).lower()
+                if (
+                    "select_related" in error_msg
+                    or "prefetch_related" in error_msg
+                    or "cannot find" in error_msg
+                    or "invalid parameter" in error_msg
+                ):
+                    # Extract field name from error message
+                    field_name = "unknown"
+
+                    # Try different patterns to extract field name
+                    if "given in select_related:" in str(e):
+                        try:
+                            field_part = (
+                                str(e)
+                                .split("given in select_related:")[1]
+                                .split("'")[1]
+                            )
+                            field_name = field_part
+                        except (IndexError, ValueError):
+                            pass
+                    elif "cannot find" in str(e) and "on" in str(e):
+                        try:
+                            # Pattern: "Cannot find 'field_name' on Model object"
+                            field_part = str(e).split("'")[1]
+                            field_name = field_part
+                        except (IndexError, ValueError):
+                            pass
+                    elif "invalid parameter to prefetch_related" in str(e):
+                        try:
+                            # Pattern: "... 'field_name' is an invalid parameter to prefetch_related()"
+                            field_part = str(e).split("'")[1]
+                            field_name = field_part
+                        except (IndexError, ValueError):
+                            pass
+
+                    # Get valid field choices
+                    model = queryset.model
+                    valid_fields = [
+                        f.name
+                        for f in model._meta.get_fields()
+                        if hasattr(f, "related_model")
+                    ]
+
+                    raise ODataExpandError(
+                        field_name=field_name,
+                        model_name=model.__name__,
+                        valid_fields=valid_fields,
+                        original_exception=e,
+                    ) from e
+                else:
+                    # Re-raise other exceptions
+                    raise
 
         return queryset
 
     # Removed _build_only_fields_list - now handled by optimize_queryset_for_select
 
     # Removed _optimize_queryset_for_expansions - now handled by _apply_odata_optimizations
+
+    def _validate_expand_fields(self, expand_fields: Dict[str, Any], model):
+        """
+        Validate that expand fields exist on the model.
+
+        Args:
+            expand_fields: Dictionary of fields to expand
+            model: Django model class
+
+        Raises:
+            ODataExpandError: If any expand field doesn't exist
+        """
+        if not expand_fields:
+            return
+
+        # Get all valid relation fields on the model
+        valid_fields = []
+        for field in model._meta.get_fields():
+            if hasattr(field, "related_model"):
+                valid_fields.append(field.name)
+
+        # Check each expand field
+        for field_name in expand_fields.keys():
+            if field_name not in valid_fields:
+                raise ODataExpandError(
+                    field_name=field_name,
+                    model_name=model.__name__,
+                    valid_fields=valid_fields,
+                )
 
     # Removed all optimization methods - now handled by extracted functions
 
@@ -183,7 +296,20 @@ class ODataMixin:
         """
         Enhanced list method with OData response formatting.
         """
-        queryset = self.filter_queryset(self.get_queryset())
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+        except (ODataFilterError, ODataExpandError) as e:
+            # Return OData-compliant error response
+            return Response(
+                {
+                    "error": {
+                        "code": e.error_code,
+                        "message": e.message,
+                        "details": e.detail.get("error", {}).get("details", []),
+                    }
+                },
+                status=e.status_code,
+            )
 
         # Handle $count parameter (only include count when explicitly requested)
         odata_params = self.get_odata_query_params()
@@ -264,6 +390,18 @@ class ODataMixin:
             instance = self.get_object()
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
+        except (ODataFilterError, ODataExpandError) as e:
+            # Return OData-compliant error response
+            return Response(
+                {
+                    "error": {
+                        "code": e.error_code,
+                        "message": e.message,
+                        "details": e.detail.get("error", {}).get("details", []),
+                    }
+                },
+                status=e.status_code,
+            )
         except Http404:
             # Return OData-style 404 response
             return Response(

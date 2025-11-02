@@ -32,6 +32,7 @@ class BlogPostViewSet(ODataModelViewSet):
     - /api/v1/odata/posts/?$expand=author,categories&$select=title,content,author,categories
     - /api/v1/odata/posts/?$expand=author($expand=user),categories&$select=title,content,author,categories
     - /api/v1/odata/posts/?$filter=view_count gt 100&$orderby=rating desc
+    - /api/v1/odata/posts/?$select=title,content,categories,author&$expand=author($expand=user)&$filter=author/user/first_name%20eq%20%27Patricia%27
     """
 
     queryset = BlogPost.objects.all()

@@ -18,10 +18,6 @@ The project has adopted Speckit with the following structure:
 .specify/
 ├── memory/
 │   └── constitution.md          # Project governance and principles
-├── specs/                        # Feature specifications
-│   └── 001-remove-drf-flex-fields.md
-├── plans/                        # Implementation plans
-│   └── 001-remove-drf-flex-fields.md
 ├── scripts/                      # Automation scripts
 │   └── bash/
 │       ├── check-prerequisites.sh

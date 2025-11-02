@@ -262,7 +262,9 @@ class TestODataMixinIntegration(TestCase):
         self.assertEqual(odata_params, expected)
 
     def test_odata_mixin_error_handling(self):
-        """Test that OData mixin handles errors gracefully."""
+        """Test that OData mixin raises exceptions for filter errors."""
+        from django_odata.exceptions import ODataFilterError
+
         # Mock request with potentially problematic parameters
         request = HttpRequest()
         request.GET = QueryDict("$filter=invalid syntax here")
@@ -270,12 +272,10 @@ class TestODataMixinIntegration(TestCase):
 
         self.viewset.request = request
 
-        # The mixin should handle errors gracefully and return original queryset
+        # The mixin should raise ODataFilterError instead of returning unfiltered data
         queryset = self.viewset.queryset
-        result = self.viewset.apply_odata_query(queryset)
-
-        # Should return the original queryset on error
-        self.assertEqual(result, queryset)
+        with self.assertRaises(ODataFilterError):
+            self.viewset.apply_odata_query(queryset)
 
 
 class TestODataExpressionTypes(TestCase):
