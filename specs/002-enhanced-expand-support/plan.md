@@ -1,7 +1,7 @@
 # Implementation Plan: Enhanced $expand Support with Full OData v4 Compliance
 
-**Branch**: `002-enhanced-expand-support` | **Date**: 2025-10-30 | **Spec**: .specify/specs/002-enhanced-expand-support.md
-**Input**: Feature specification from `/specs/002-enhanced-expand-support.md`
+**Branch**: `002-enhanced-expand-support` | **Date**: 2025-10-30 | **Spec**: specs/002-enhanced-expand-support/spec.md
+**Input**: Feature specification from `specs/002-enhanced-expand-support/spec.md`
 
 ## Summary
 
@@ -34,13 +34,14 @@ Enhance the `$expand` parameter implementation to support full OData v4 specific
 ### Documentation (this feature)
 
 ```text
-.specify/specs/
-├── 002-enhanced-expand-support.md
-.specify/plans/
-├── 002-enhanced-expand-support.md # This file
+specs/
+├── 002-enhanced-expand-support/
+│   ├── spec.md
+│   └── plan.md             # This file
 .specify/
 ├── memory/
 ├── templates/
+└── scripts/
 ```
 
 ### Source Code (repository root)

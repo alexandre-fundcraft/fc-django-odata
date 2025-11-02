@@ -1,7 +1,7 @@
 # Task Checklist: SPEC-004 - Migrate to UV
 
-**Specification**: `.specify/specs/004-migrate-to-uv.md`  
-**Plan**: `.specify/plans/004-migrate-to-uv.md`  
+**Specification**: `specs/004-migrate-to-uv/spec.md`
+**Plan**: `specs/004-migrate-to-uv/plan.md`  
 **Status**: Ready to Implement  
 **Created**: 2025-10-30
 
