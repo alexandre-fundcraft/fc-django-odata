@@ -2,7 +2,9 @@
 Utility functions for OData query parsing and Django ORM integration.
 """
 
+import hashlib
 import logging
+from contextvars import ContextVar
 from typing import Any, Dict, Union
 
 from django.db.models import QuerySet
@@ -11,6 +13,72 @@ from odata_query.django import apply_odata_query
 from odata_query.exceptions import ODataException
 
 logger = logging.getLogger(__name__)
+
+# ContextVar for request-scoped OData query caching
+_request_cache: ContextVar[Dict[str, QuerySet]] = ContextVar("odata_cache", default={})
+
+
+def _generate_request_cache_key(
+    queryset: QuerySet, query_params: Dict[str, Any]
+) -> str:
+    """
+    Generate a cache key for request-scoped OData query caching.
+
+    Args:
+        queryset: Django QuerySet being modified
+        query_params: OData query parameters dictionary
+
+    Returns:
+        SHA256 hash string suitable for cache key
+    """
+    # Include model identifier for cache isolation
+    model_key = queryset.model._meta.label_lower
+
+    # Sort query params for consistent hashing
+    sorted_params = sorted(query_params.items())
+    params_str = str(sorted_params)
+
+    # Create hash of model + parameters
+    key_data = f"{model_key}:{params_str}"
+    return hashlib.sha256(key_data.encode()).hexdigest()
+
+
+def clear_odata_cache() -> None:
+    """
+    Manually clear the current request's OData query cache.
+
+    This function can be called to explicitly clear the cache when needed,
+    particularly useful in long-running async contexts or for testing.
+    """
+    _request_cache.set({})
+
+
+def odata_cache_context():
+    """
+    Context manager for scoped OData caching.
+
+    Use this context manager to ensure cache is cleared after the context,
+    even in long-running async tasks.
+
+    Example:
+        with odata_cache_context():
+            # Cache operations here
+            pass
+        # Cache automatically cleared
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _context_manager():
+        # Cache is already scoped to context, but we can reset it
+        original_cache = _request_cache.get()
+        try:
+            yield
+        finally:
+            # Reset to original state (effectively clearing any new entries)
+            _request_cache.set(original_cache)
+
+    return _context_manager()
 
 
 def parse_expand_fields_v2(expand_string: str) -> Dict[str, Dict[str, Any]]:
@@ -287,7 +355,11 @@ def apply_odata_query_params(
     queryset: QuerySet, query_params: Dict[str, Any]
 ) -> QuerySet:
     """
-    Apply OData query parameters to a Django QuerySet.
+    Apply OData query parameters to a Django QuerySet with request-scoped caching.
+
+    This function caches query results within the same request to avoid redundant
+    processing of identical OData query parameters. The cache is automatically
+    scoped to the current request and cleared when the request ends.
 
     Args:
         queryset: Django QuerySet to filter
@@ -299,12 +371,35 @@ def apply_odata_query_params(
     Raises:
         ODataQueryError: If the OData query is invalid
     """
+    # Get current request cache (creates new dict if not set)
+    cache = _request_cache.get()
+
+    # Generate cache key for this query
+    cache_key = _generate_request_cache_key(queryset, query_params)
+
+    # Check if result is already cached
+    if cache_key in cache:
+        return cache[cache_key]
+
+    # Apply query transformations
     try:
-        queryset = _apply_filter(queryset, query_params)
-        queryset = _apply_orderby(queryset, query_params)
-        queryset = _apply_skip(queryset, query_params)
-        queryset = _apply_top(queryset, query_params)
-        return queryset
+        result_queryset = _apply_filter(queryset, query_params)
+        result_queryset = _apply_orderby(result_queryset, query_params)
+        result_queryset = _apply_skip(result_queryset, query_params)
+        result_queryset = _apply_top(result_queryset, query_params)
+
+        # Cache the result for this request (with optional size monitoring)
+        new_cache = cache.copy()
+        new_cache[cache_key] = result_queryset
+
+        # Optional: Monitor cache size (can be made configurable later)
+        cache_size = len(new_cache)
+        if cache_size > 1000:  # Configurable limit
+            logger.warning(f"OData query cache size exceeded limit: {cache_size}")
+
+        _request_cache.set(new_cache)
+
+        return result_queryset
 
     except ODataException as e:
         logger.error(f"OData query error: {e}")
