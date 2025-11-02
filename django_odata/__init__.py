@@ -1,15 +1,17 @@
 """
-Django OData package for creating OData-inspired REST API endpoints.
+Django OData package for creating OData-compliant REST API endpoints.
 
-This package combines drf-flex-fields and odata-query to provide:
-- Dynamic field selection and expansion
-- OData query parameter support ($filter, $orderby, $top, $skip, etc.)
-- Automatic Django ORM query translation
+This package provides native OData v4 implementation with:
+- Native field selection and expansion (no external dependencies)
+- Full OData query parameter support ($filter, $orderby, $top, $skip, $select, $expand, $count)
+- Automatic Django ORM query translation and optimization
+- Field-level query optimization with .only() and Prefetch
+- Standards-compliant OData response format
 - Extensible architecture for custom OData features
 """
 
-__version__ = "0.1.0"
-__author__ = "Your Name"
+__version__ = "2.0.0"
+__author__ = "Alexandre Busquets"
 
 from .mixins import ODataMixin, ODataSerializerMixin
 from .serializers import ODataModelSerializer, ODataSerializer
