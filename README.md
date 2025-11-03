@@ -19,7 +19,8 @@ This package transforms your Django models into OData-compliant endpoints by sea
 - **OData Error Handling**: Standardized error responses following OData specifications (SPEC-011)
 
 ### ⚡ **Performance & Optimization**
-- **Field-Level Query Optimization**: Automatically fetches only requested fields from database using Django's `.only()` (SPEC-003)
+- **Request-Scoped Query Caching**: Automatic caching of identical OData queries within the same request ([SPEC-010](docs/odata-query-caching.md))
+- **Field-Level Query Optimization**: Automatically fetches only requested fields from database using Django's `.only()` ([SPEC-003](docs/field-optimization.md))
 - **Intelligent Query Optimization**: Automatic `select_related()` and `prefetch_related()` application to prevent N+1 queries
 - **Smart Query Translation**: OData filter expressions automatically converted to optimized Django ORM queries
 - **Efficient Data Loading**: Reduces data transfer by 70-90% when using `$select` parameter
@@ -302,7 +303,7 @@ GET /odata/posts/?$expand=author($select=name,bio)
 - **Field selection**: Applies `.only()` to limit fields fetched from related models
 - **No manual optimization needed**: The package detects relationship types and applies appropriate optimizations automatically
 
-See [Field Optimization Documentation](docs/field-optimization.md) for detailed information and examples.
+See [Field Optimization Documentation](docs/field-optimization.md) and [OData Query Caching Documentation](docs/odata-query-caching.md) for detailed information and examples.
 
 ### Counting
 
@@ -392,6 +393,10 @@ query = (ODataQueryBuilder()
 
 # query now contains the query parameters dictionary
 ```
+
+### Cache Management
+
+See [OData Query Caching Documentation](docs/odata-query-caching.md) for detailed information on cache management, performance benefits, and framework integration.
 
 ## OData Query Options Reference
 
@@ -950,6 +955,11 @@ This fork adds significant improvements over the original:
 - Improved nested expansion handling
 - Better support for complex Django model relationships
 - Enhanced compatibility with Django 4.2+ and Python 3.8+
+- **Request-Scoped Query Caching (SPEC-010)**: Automatic caching of identical OData queries within the same request using ContextVar. Provides up to 50% performance improvement for repeated queries while ensuring data consistency. Includes cache management utilities for long-running async tasks.
+- **Field-Level Query Optimization (SPEC-003)**: Automatically fetches only requested fields from database using Django's `.only()` method. Reduces data transfer by 70-90% when using `$select` parameter. Works seamlessly with both `select_related` and `prefetch_related` optimizations.
+- **Removed `drf-flex-fields` Dependency**: Replaced `drf-flex-fields` with a native implementation for field selection (`$select`) and expansion (`$expand`). This change removes external dependencies for core functionality, improves performance, and simplifies the architecture. The API remains 100% backward compatible.
+- **Enhanced Query Optimization**: The native expansion logic now automatically applies `select_related` and `prefetch_related` to prevent N+1 query issues, making your API faster out-of-the-box.
+- **Count Parameter Behavior (SPEC-004)**: Clarified that `@odata.count` is only included in responses when `$count=true` is explicitly requested. This default behavior optimizes performance by avoiding unnecessary COUNT(*) queries unless needed.
 
 ### v0.1.0
 

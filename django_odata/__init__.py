@@ -22,7 +22,12 @@ from .exceptions import (
 )
 from .mixins import ODataMixin, ODataSerializerMixin
 from .serializers import ODataModelSerializer, ODataSerializer
-from .utils import apply_odata_query_params, parse_odata_query
+from .utils import (
+    apply_odata_query_params,
+    clear_odata_cache,
+    odata_cache_context,
+    parse_odata_query,
+)
 from .viewsets import ODataModelViewSet, ODataViewSet
 
 __all__ = [
@@ -33,6 +38,8 @@ __all__ = [
     "ODataMixin",
     "ODataSerializerMixin",
     "apply_odata_query_params",
+    "clear_odata_cache",
+    "odata_cache_context",
     "parse_odata_query",
     "ODataFilterError",
     "ODataFieldNotFoundError",
